@@ -1,17 +1,14 @@
 """Business queries over authoritative project records."""
 
 from .operations_reconciliation import RECONCILIATION_VIEWS
+from . import belt_views
 
 VIEWS = {
     'belt-coverage': (
         '行李带计数覆盖审计',
-        '核对波次是否有有效采样、计数是否落在到达窗口内。窗口外采样须由值班人员复核。',
-        ['波次', '航站楼', '计划行李', '有效计数', '窗口外计数', '有效行李总量', '处置建议'],
-        """
-SELECT w.code,w.terminal,w.planned_bags,COUNT(c.id),SUM(CASE WHEN c.counted_at < w.arrival_start OR c.counted_at > w.arrival_end THEN 1 ELSE 0 END) AS outside,
-       COALESCE(SUM(c.bag_count),0),CASE WHEN COUNT(c.id)=0 THEN '补录计数' WHEN SUM(CASE WHEN c.counted_at < w.arrival_start OR c.counted_at > w.arrival_end THEN 1 ELSE 0 END)>0 THEN '核对采样时段' ELSE '窗口内' END
-FROM flight_waves w LEFT JOIN belt_counts c ON w.id=c.wave_id AND c.status='accepted' GROUP BY w.id ORDER BY outside DESC,w.arrival_start,w.code
-""",
+        '核对波次是否有有效采样、计数是否落在到达窗口内。累计读数按相邻差折算为分时段件数，换表跨段待补数时单独提示；窗口外采样须由值班人员复核。',
+        ['波次', '航站楼', '计划行李', '有效读数', '窗口外计数', '折算行李总量', '处置建议'],
+        belt_views.coverage_rows,
     ),
     'shift-conflicts': (
         '排班重叠核对',

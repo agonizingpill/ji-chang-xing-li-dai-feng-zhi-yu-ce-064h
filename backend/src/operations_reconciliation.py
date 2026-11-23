@@ -1,5 +1,7 @@
 """Additional operational reconciliation rules for this project."""
 
+from . import belt_views
+
 RECONCILIATION_VIEWS = {
     'cancellation-reconciliation': (
         '取消与备降波次核销',
@@ -17,21 +19,9 @@ ORDER BY CASE WHEN w.cancellation_state='normal' THEN 1 ELSE 0 END,w.arrival_sta
     ),
     'first-bag-window': (
         '首件行李接驳偏差',
-        '逐波次和行李带定位首个实际有件的有效计数，对照波次窗口识别等待或时间对齐异常。',
-        ['波次', '行李带', '到达窗口开始', '窗口结束', '首个有件计数', '与窗口起点差 分', '核对建议'],
-        """
-WITH first_bags AS (
-    SELECT wave_id,belt_code,MIN(counted_at) FILTER (WHERE status='accepted' AND bag_count>0) AS first_at
-    FROM belt_counts GROUP BY wave_id,belt_code
-)
-SELECT w.code,f.belt_code,w.arrival_start,w.arrival_end,f.first_at,
-       ROUND(EXTRACT(EPOCH FROM (f.first_at-w.arrival_start))/60,1),
-       CASE WHEN f.first_at IS NULL THEN '待录入首件'
-            WHEN f.first_at<w.arrival_start THEN '核对提前与时钟差'
-            WHEN f.first_at>w.arrival_end THEN '首件超出波次窗口'
-            ELSE '窗口内已有件' END
-FROM flight_waves w LEFT JOIN first_bags f ON w.id=f.wave_id ORDER BY w.arrival_start,w.code,f.belt_code
-""",
+        '逐波次和行李带按折算后的分时段件数定位首个有件时段，对照波次窗口识别等待或时间对齐异常。换表跨段补数前不判定首件。',
+        ['波次', '行李带', '到达窗口开始', '窗口结束', '首个有件时段', '与窗口起点差 分', '核对建议'],
+        belt_views.first_bag_rows,
     ),
     'congestion-action-followup': (
         '拥堵复盘行动回收',

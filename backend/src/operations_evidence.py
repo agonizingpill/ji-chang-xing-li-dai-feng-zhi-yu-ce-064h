@@ -28,6 +28,14 @@ def query(sql, parameters=()):
                     for row in cursor.fetchall()]
 
 
+def provider_rows(source):
+    """Run a view source, which is either a SQL string or a zero-arg callable."""
+
+    if callable(source):
+        return list(source())
+    return query(source + "\nLIMIT 500")
+
+
 def ensure_receipt_table():
     global _schema_ready
     with _schema_lock:
@@ -58,7 +66,7 @@ def get_view(module):
 
 
 def evidence_rows(sql):
-    for row in query(sql + "\nLIMIT 500"):
+    for row in provider_rows(sql)[:500]:
         cells = jsonable_encoder(row)
         payload = json.dumps(cells, ensure_ascii=False, separators=(",", ":"))
         fingerprint = hashlib.sha256(payload.encode()).hexdigest()

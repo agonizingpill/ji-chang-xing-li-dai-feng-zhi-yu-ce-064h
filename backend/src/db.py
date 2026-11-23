@@ -39,6 +39,22 @@ def migrate():
           counted_at TIMESTAMPTZ NOT NULL, bag_count INT NOT NULL CHECK (bag_count >= 0), scan_source TEXT NOT NULL,
           status TEXT NOT NULL DEFAULT 'accepted' CHECK (status IN ('accepted','voided')), UNIQUE(wave_id,belt_code,counted_at)
         );
+        -- 行李带表计按累计读数上报；旧记录保留为单段计数。
+        ALTER TABLE belt_counts ADD COLUMN IF NOT EXISTS reading_kind TEXT NOT NULL DEFAULT 'interval';
+        ALTER TABLE belt_counts ADD COLUMN IF NOT EXISTS meter_code TEXT;
+        ALTER TABLE belt_counts ADD COLUMN IF NOT EXISTS meter_swap BOOLEAN NOT NULL DEFAULT FALSE;
+        ALTER TABLE belt_counts ADD COLUMN IF NOT EXISTS received_at TIMESTAMPTZ NOT NULL DEFAULT now();
+        ALTER TABLE belt_counts DROP CONSTRAINT IF EXISTS belt_counts_reading_kind_check;
+        ALTER TABLE belt_counts ADD CONSTRAINT belt_counts_reading_kind_check CHECK (reading_kind IN ('cumulative','interval'));
+        CREATE TABLE IF NOT EXISTS belt_segment_supplements (
+          id SERIAL PRIMARY KEY, wave_id INT NOT NULL REFERENCES flight_waves(id) ON DELETE CASCADE,
+          belt_code TEXT NOT NULL, fingerprint CHAR(64) NOT NULL, start_at TIMESTAMPTZ NOT NULL, end_at TIMESTAMPTZ NOT NULL,
+          bag_count INT NOT NULL CHECK (bag_count >= 0), note TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'verified' CHECK (status IN ('verified','superseded')),
+          verified_by INT REFERENCES users(id), verified_at TIMESTAMPTZ NOT NULL DEFAULT now(), superseded_at TIMESTAMPTZ,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(), UNIQUE(wave_id,belt_code,fingerprint)
+        );
+        CREATE INDEX IF NOT EXISTS belt_segment_supplements_wave_idx ON belt_segment_supplements(wave_id,status);
         CREATE TABLE IF NOT EXISTS peak_forecasts (
           id SERIAL PRIMARY KEY, wave_id INT NOT NULL REFERENCES flight_waves(id), status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued','running','ready','blocked','failed','published')),
           peak_bags NUMERIC(10,2), forecast_at TIMESTAMPTZ, seasonal_strength NUMERIC(8,4), trend_per_hour NUMERIC(8,4),

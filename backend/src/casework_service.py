@@ -24,8 +24,14 @@ def workflow_for(code):
 
 
 def source_rows(workflow, source_key=None):
-    template = workflow['sql']
-    sql = f'SELECT source_key, subject, source_summary, readiness FROM ({template}) source_records'
+    source = workflow['sql']
+    if callable(source):
+        rows = [dict(row) for row in source()]
+        if source_key is not None:
+            rows = [row for row in rows if row['source_key'] == source_key]
+        rows.sort(key=lambda row: (row['readiness'], row['source_key']))
+        return rows[:150] if source_key is None else rows
+    sql = f'SELECT source_key, subject, source_summary, readiness FROM ({source}) source_records'
     if source_key is not None:
         results = query(sql + ' WHERE source_key=%s', (source_key,))
     else:
